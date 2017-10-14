@@ -31,141 +31,60 @@ reload(DrawSamples)
 reload(FeatureExtractors)
 reload(TopicModels)
 
-def importBio():
-    dat={}
-    f=open('Datasets/Twitter/ICPSR_Gender.csv','r')
-    dta=csv.reader(f)
-    for i,line in enumerate(dta):
-        if i>0:
-            dat[line[0]]=line[1]
-    return dat
-
-def makeBio():
-    import yaml
-    import urllib2
-    import csv
-    dat={}
-    url=urllib2.urlopen('https://github.com/unitedstates/congress-legislators/raw/master/legislators-current.yaml')
-    txt=url.read().decode('utf8')
-    cong=yaml.load(txt)
-    for mem in cong:
-        if 'icpsr' in mem['id'].keys():
-            dat[str(mem['id']['icpsr'])]=mem['bio']['gender']
-    url=urllib2.urlopen('https://github.com/unitedstates/congress-legislators/raw/master/legislators-historical.yaml')
-    txt=url.read().decode('utf8')
-    cong=yaml.load(txt)
-    for mem in cong:
-        if 'icpsr' in mem['id'].keys():
-            dat[str(mem['id']['icpsr'])]=mem['bio']['gender']
-            
-    with open('Datasets/Twitter/ICPSR_Gender.csv','wb') as f:
-        writer=csv.writer(f,delimiter=',')
-        writer.writerow(['icpsr','gender'])
-        for k,v in dat.iteritems():
-            writer.writerow([k,v])
+def importMetaDataFile(filename):
+    '''
+    Grab the data that used to be living in /home/lfriedl/twitterUSVoters/data/twitterDB-matching/match-results/locsFeb3/national2M-rule3.csv
+    We want to create a matrix that is twitterID x demographic data (age, sex, income, etc)
     
-    return dat
-
-
-def getTweets(idx):
+    We may want to subsample this file, to the 1k IDs Luke downloaded locally.
+    
+    Input: string of the file and location for the user metadata
+    Output: matrix of twitterID x demographic data
     '''
-    Gets tweets from the idx. 
+    filename = ''
+    with open(filename,'r') as f:
+        dta=csv.reader(f)
+        for i,line in enumerate(dta):
+            if i>0:
+                dat[line[0]]=line[1]
+
+    
+    return meta
+
+def getTweets(twitterid):
     '''
-    texts={}
-    source_filename='Datasets/Twitter/members.zip'
-    parser = etree.XMLParser(encoding='utf8',recover=True)
-    with zipfile.ZipFile(source_filename) as zf:
-        for i,member in enumerate(zf.infolist()):
-            name=member.filename.split('/')[1].split('.')[0]    #filename is Raw3/name.csv
-            if idx ==name:
-                #print idx, name
-                raw=zf.open(member)
-                data=csv.reader(raw)
-                for j,line in enumerate(data):
-                    if j>0:
-                        texts[idx+'_'+str(j)]=line[0]
-    if texts=={}:
-        print 'no tweets for ', idx
+    Function to get the twitter data for an individual twitter ID.
+    This function is written to work with Kenny's github example here: https://github.com/kennyjoseph/twitter_dm
+    
+    Input: string of twitterID
+    Output: list of the raw string of all tweets for twitterID
+    '''
+    from twitter_dm.TwitterUser import TwitterUser
+
+    tweets=[]
+    u = TwitterUser()
+    u.populate_tweets_from_file(twitterid+'.json')  #Need to figure out of we can use numeric ID (123456789.json) or name (kenny_joseph.json)
+    
+    for t in u.tweets:
+        tweets.append(t.tokens) #not sure if tokens is exactly what we want, we want the raw words, not necessarily tokens. We'll check this.
+    # 
+    # texts={}
+    # source_filename='Datasets/Twitter/members.zip'
+    # parser = etree.XMLParser(encoding='utf8',recover=True)
+    # with zipfile.ZipFile(source_filename) as zf:
+    #     for i,member in enumerate(zf.infolist()):
+    #         name=member.filename.split('/')[1].split('.')[0]    #filename is Raw3/name.csv
+    #         if idx ==name:
+    #             #print idx, name
+    #             raw=zf.open(member)
+    #             data=csv.reader(raw)
+    #             for j,line in enumerate(data):
+    #                 if j>0:
+    #                     texts[idx+'_'+str(j)]=line[0]
+    # if texts=={}:
+    #     print 'no tweets for ', idx
         
-    return texts
-
-def makeMetaData(num=-1):
-    '''metadata produces [twitterid, gender, party] and excludes people who are not republicans or democrats.'''
-    dat=importBio()
-    data={}
-    texts={}
-    f=open('Datasets/Twitter/IdealPts_112_House-Twitter.csv')
-    dta=csv.reader(f)
-    for i,line in enumerate(dta):
-        if num!= -1:
-            if i>num:
-                break
-        if i>0:
-            if line[8]!='':
-                if line[5]=='100':        #recode to 1,0 fits with previous code and keeps direction of analysis the sm
-                    party=1
-                elif line[5]=='200':
-                    party=0
-                else:
-                    continue
-                    party=''
-                if line[1] not in dat.keys():
-                    if line[1] in ['94659','94828']:
-                        gender='m'
-                    else:
-                        'Error, ICPSR not recognized. Case ignored'
-                else:
-                    gender=dat[line[1]].lower()
-                tid=line[8].lower()
-                text=getTweets(tid)
-                for ids in text.keys():
-                    data[ids]=[gender,party]
-                texts.update(text)
-                #data[tid]=[gender,line[7],line[6].lower(),party,0,line[1],line[2],line[4]+'-'+line[3]]#,numTxt[tid],numWds[tid]]
-                #data[tid]=[gender,party]
-                #texts.update(getTweets(tid))
-    f.close()
-    tot=i
-    f=open('Datasets/Twitter/IdealPts_112_Senate-Twitter.csv')
-    dta=csv.reader(f)
-    for i,line in enumerate(dta):
-        if num!= -1:
-            if i+tot>num:
-                break
-        if i>0:
-            if line[8]!='':
-                if line[5]=='100':
-                    party=1
-                elif line[5]=='200':
-                    party=0
-                else:
-                    continue
-                    party=''
-                if line[1] not in dat.keys():
-                    if line[1] in ['94659','94828']:
-                        gender='m'
-                    else:
-                        'Error, ICPSR not recognized. Case ignored'
-                else:
-                    gender=dat[line[1]].lower()
-                tid=line[8].lower()
-                text=getTweets(tid)
-                for ids in text.keys():
-                    data[ids]=[gender,party]
-                texts.update(text)
-                #if tid in numTxt.keys():
-                #data[tid]=[gender,line[7],line[6].lower(),party,1,line[1],line[2],line[4]]#,numTxt[tid],numWds[tid]]
-    f.close()
-    
-    print 'saving meta-data file'
-    with open('Twitter/Results/TwitterMeta.csv','wb') as f:
-        writer=csv.writer(f,delimiter=',')
-        writer.writerow(['id','gender','party'])
-        for idx, info in data.iteritems():
-            writer.writerow([idx]+info)
-    #header=['TwitterID','dw1', 'name', 'party','senate', 'ICPSR', 'stateCode', 'district','Num112Twts','Num112Words','TotalTwts']
-    
-    return data, texts
+    return tweets
 
 def Clean_Tweets(text,stopwords='nltk',onlyHashtags=False):
     '''this function tokenizes `tweets` using simple rules:
